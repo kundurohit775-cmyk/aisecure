@@ -64,6 +64,9 @@ export interface ShareConfig {
   expiresAt?: string; // ISO cutoff date/time
   accessMode: AccessMode;
   requireOtp: boolean;
+  requirePassword?: boolean;
+  passwordHash?: string;
+  passwordHint?: string;
   status: ShareStatus;
   
   lastAccessedAt?: string;
@@ -79,6 +82,8 @@ export type AuditEventType =
   | 'DOC_EXPIRED'
   | 'DOC_REVOKED'
   | 'UNAUTHORIZED_ACCESS_ATTEMPT'
+  | 'PASSWORD_VERIFIED'
+  | 'PASSWORD_FAILED'
   | 'OTP_REQUESTED'
   | 'OTP_VERIFIED'
   | 'OTP_FAILED';

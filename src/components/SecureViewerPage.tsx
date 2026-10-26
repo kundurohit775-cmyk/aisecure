@@ -12,6 +12,9 @@ import {
   Flame,
   Info,
   ShieldCheck,
+  KeyRound,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import {
   requestDocumentAccess,
@@ -44,15 +47,23 @@ export const SecureViewerPage: React.FC<SecureViewerPageProps> = ({
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [isOtpActive, setIsOtpActive] = useState(false);
 
+  // Password verification states
+  const [isPasswordActive, setIsPasswordActive] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [showPasswordInput, setShowPasswordInput] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Initial access request
-  const fetchAccess = async (otpCode?: string) => {
+  const fetchAccess = async (otpCode?: string, passwordAttempt?: string) => {
     setIsLoading(true);
     try {
+      const pwd = passwordAttempt !== undefined ? passwordAttempt : passwordInput;
       const res = await requestDocumentAccess({
         token,
         currentUser,
+        password: pwd,
         otpCode,
         simulatedIp: '192.168.10.84',
         simulatedUserAgent: navigator.userAgent,
@@ -61,6 +72,8 @@ export const SecureViewerPage: React.FC<SecureViewerPageProps> = ({
       setAccessResult(res);
 
       if (res.success) {
+        setIsPasswordActive(false);
+        setIsOtpActive(false);
         if (res.timeRemainingSeconds !== undefined) {
           setTimeRemaining(res.timeRemainingSeconds);
         }
@@ -72,7 +85,14 @@ export const SecureViewerPage: React.FC<SecureViewerPageProps> = ({
           setPdfBlobUrl(url);
         }
       } else {
-        if (res.error === 'OTP_REQUIRED') {
+        if (res.error === 'PASSWORD_REQUIRED') {
+          setIsPasswordActive(true);
+          setPasswordError(null);
+        } else if (res.error === 'PASSWORD_INVALID') {
+          setIsPasswordActive(true);
+          setPasswordError('Incorrect document password entered. Please try again.');
+        } else if (res.error === 'OTP_REQUIRED') {
+          setIsPasswordActive(false);
           setIsOtpActive(true);
         }
       }
@@ -218,6 +238,102 @@ export const SecureViewerPage: React.FC<SecureViewerPageProps> = ({
         <p className="text-xs text-slate-500 font-mono mt-1">
           Zero-disk write architecture • AES-256-GCM
         </p>
+      </div>
+    );
+  }
+
+  // Handle Password Verification State
+  if (isPasswordActive && accessResult && !accessResult.success) {
+    const hint = accessResult.details?.hint as string | undefined;
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
+          <div className="text-center space-y-2">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-950/60 border border-indigo-700/80 flex items-center justify-center text-indigo-400 mx-auto">
+              <KeyRound className="w-6 h-6" />
+            </div>
+            <h2 className="text-lg font-bold text-white tracking-tight">
+              Password Protected Document
+            </h2>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              The sender has restricted <span className="font-semibold text-slate-200">"{accessResult.documentTitle || 'this document'}"</span> with an access password.
+            </p>
+          </div>
+
+          {passwordError && (
+            <div className="p-3 bg-rose-950/40 border border-rose-800/80 rounded-xl text-xs text-rose-300 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+              <span>{passwordError}</span>
+            </div>
+          )}
+
+          {hint && (
+            <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 space-y-1">
+              <span className="text-[11px] font-semibold text-indigo-400 uppercase tracking-wider block">
+                Sender Hint
+              </span>
+              <p className="italic text-slate-300">{hint}</p>
+            </div>
+          )}
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!passwordInput.trim()) return;
+              fetchAccess(undefined, passwordInput.trim());
+            }}
+            className="space-y-4"
+          >
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Enter Password / Passkey
+              </label>
+              <div className="relative">
+                <input
+                  type={showPasswordInput ? 'text' : 'password'}
+                  autoFocus
+                  value={passwordInput}
+                  onChange={(e) => {
+                    setPasswordInput(e.target.value);
+                    setPasswordError(null);
+                  }}
+                  placeholder="Enter sender-provided password"
+                  className="w-full pl-3 pr-10 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordInput(!showPasswordInput)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                >
+                  {showPasswordInput ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={!passwordInput.trim()}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-xs font-semibold text-white rounded-xl transition-colors shadow-sm"
+            >
+              <Lock className="w-4 h-4" />
+              <span>Unlock Document</span>
+            </button>
+          </form>
+
+          <div className="pt-2 border-t border-slate-800">
+            <button
+              onClick={onExit}
+              className="w-full flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Cancel and Return</span>
+            </button>
+          </div>
+        </div>
       </div>
     );
   }

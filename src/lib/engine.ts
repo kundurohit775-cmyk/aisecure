@@ -16,6 +16,7 @@ import {
   sha256,
 } from './crypto';
 import { stampWatermarkedPdf } from './pdfWatermark';
+import { convertToEncryptedPdfBuffer } from './docxHelper';
 
 const STORAGE_KEYS = {
   CURRENT_USER_ID: 'haven_vault_current_user_id',
@@ -143,6 +144,8 @@ export type AccessResult =
         | 'TIME_EXPIRED'
         | 'UNAUTHORIZED_USER'
         | 'MAX_VIEWS_REACHED'
+        | 'PASSWORD_REQUIRED'
+        | 'PASSWORD_INVALID'
         | 'OTP_REQUIRED'
         | 'OTP_INVALID'
         | 'OTP_LOCKED';
@@ -166,6 +169,7 @@ export type AccessResult =
 export async function requestDocumentAccess(params: {
   token: string;
   currentUser: User;
+  password?: string;
   otpCode?: string;
   simulatedIp?: string;
   simulatedUserAgent?: string;
@@ -173,6 +177,7 @@ export async function requestDocumentAccess(params: {
   const {
     token,
     currentUser,
+    password,
     otpCode,
     simulatedIp = '192.168.1.100',
     simulatedUserAgent = navigator.userAgent,
@@ -338,7 +343,67 @@ export async function requestDocumentAccess(params: {
     }
   }
 
-  // 5. Check Email OTP requirement
+  // 5. Check Password Protection (if required by sender)
+  if (share.requirePassword && share.passwordHash) {
+    if (!password) {
+      return {
+        success: false,
+        error: 'PASSWORD_REQUIRED',
+        message: 'This document is protected with a sender-specified password. Please enter the password to view.',
+        share,
+        documentTitle,
+        details: {
+          hint: share.passwordHint,
+        },
+      };
+    }
+
+    const inputPasswordHash = await sha256(password.trim());
+    if (inputPasswordHash !== share.passwordHash) {
+      await appendAuditLog({
+        timestamp: now.toISOString(),
+        eventType: 'PASSWORD_FAILED',
+        documentId: share.documentId,
+        documentTitle,
+        userId: currentUser.id,
+        userEmail: currentUser.email,
+        userName: currentUser.name,
+        token,
+        shareId: share.id,
+        ipAddress: simulatedIp,
+        userAgent: simulatedUserAgent,
+        details: 'Failed document unlock attempt: Invalid password supplied.',
+      });
+
+      return {
+        success: false,
+        error: 'PASSWORD_INVALID',
+        message: 'Incorrect password entered. Access denied.',
+        share,
+        documentTitle,
+        details: {
+          hint: share.passwordHint,
+        },
+      };
+    }
+
+    await appendAuditLog({
+      timestamp: now.toISOString(),
+      eventType: 'PASSWORD_VERIFIED',
+      documentId: share.documentId,
+      documentTitle,
+      userId: currentUser.id,
+      userEmail: currentUser.email,
+      userName: currentUser.name,
+      token,
+      shareId: share.id,
+      ipAddress: simulatedIp,
+      userAgent: simulatedUserAgent,
+      details: 'Recipient successfully verified document password.',
+    });
+  }
+
+  // 6. Check Email OTP requirement
   if (share.requireOtp) {
     const sessions = getStoredOtpSessions();
     const session = sessions[share.id];
@@ -527,10 +592,31 @@ export async function requestDocumentAccess(params: {
   let decryptedText: string | undefined = undefined;
 
   try {
-    if (doc.fileType === 'pdf') {
-      decryptedBytes = await decryptToBytes(doc.encryptedPayload);
+    const rawBytes = await decryptToBytes(doc.encryptedPayload);
+    
+    // Check if rawBytes is a PDF (%PDF-)
+    const isPdf =
+      rawBytes.length > 4 &&
+      rawBytes[0] === 0x25 &&
+      rawBytes[1] === 0x50 &&
+      rawBytes[2] === 0x44 &&
+      rawBytes[3] === 0x46;
+
+    if (isPdf) {
+      decryptedBytes = rawBytes;
     } else {
-      decryptedText = await decryptToString(doc.encryptedPayload);
+      // Non-PDF (e.g. DOCX, TXT, MD): Convert in memory to structured PDF for viewer and watermarking
+      decryptedBytes = await convertToEncryptedPdfBuffer({
+        filename: doc.filename,
+        buffer: rawBytes,
+        defaultTitle: doc.title,
+      });
+
+      try {
+        decryptedText = new TextDecoder('utf-8', { fatal: false }).decode(rawBytes);
+      } catch {
+        // binary
+      }
     }
   } catch (err) {
     console.error('Decryption error:', err);
@@ -649,7 +735,23 @@ export async function downloadWatermarkedCopy(params: {
   }
 
   // 1. Decrypt raw bytes strictly in memory
-  const rawBytes = await decryptToBytes(document.encryptedPayload);
+  let rawBytes = await decryptToBytes(document.encryptedPayload);
+
+  // Check if rawBytes is a PDF (%PDF-), otherwise convert in memory to PDF for watermarking
+  const isPdf =
+    rawBytes.length > 4 &&
+    rawBytes[0] === 0x25 &&
+    rawBytes[1] === 0x50 &&
+    rawBytes[2] === 0x44 &&
+    rawBytes[3] === 0x46;
+
+  if (!isPdf) {
+    rawBytes = await convertToEncryptedPdfBuffer({
+      filename: document.filename,
+      buffer: rawBytes,
+      defaultTitle: document.title,
+    });
+  }
 
   // 2. Stamp diagonal watermarks on every page using pdf-lib
   const stampedBytes = await stampWatermarkedPdf(rawBytes, {
@@ -751,8 +853,16 @@ export async function createShareLink(params: {
   expiresAt?: string;
   accessMode: ShareConfig['accessMode'];
   requireOtp: boolean;
+  requirePassword?: boolean;
+  password?: string;
+  passwordHint?: string;
 }): Promise<ShareConfig> {
   const token = generateSecureToken(16);
+  let passwordHash: string | undefined = undefined;
+  if (params.requirePassword && params.password) {
+    passwordHash = await sha256(params.password.trim());
+  }
+
   const newShare: ShareConfig = {
     id: `share-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     documentId: params.documentId,
@@ -771,6 +881,9 @@ export async function createShareLink(params: {
     expiresAt: params.expiresAt,
     accessMode: params.accessMode,
     requireOtp: params.requireOtp,
+    requirePassword: params.requirePassword,
+    passwordHash,
+    passwordHint: params.passwordHint,
     status: 'active',
   };
 
@@ -795,9 +908,9 @@ export async function createShareLink(params: {
     userAgent: navigator.userAgent,
     details: `Share created. Target: ${params.targetType} ${
       params.targetUserName ? `(${params.targetUserName})` : ''
-    }. Mode: ${params.viewMode}. Access: ${params.accessMode}. OTP: ${
-      params.requireOtp ? 'Enforced' : 'Disabled'
-    }.`,
+    }. Mode: ${params.viewMode}. Access: ${params.accessMode}. Password: ${
+      params.requirePassword ? 'Enforced' : 'Disabled'
+    }. OTP: ${params.requireOtp ? 'Enforced' : 'Disabled'}.`,
   });
 
   return newShare;

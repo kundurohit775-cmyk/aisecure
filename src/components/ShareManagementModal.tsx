@@ -157,6 +157,9 @@ export const ShareManagementModal: React.FC<ShareManagementModalProps> = ({
                           ) : (
                             <span className="text-slate-500">General Link</span>
                           )}
+                          {share.requirePassword && (
+                            <span className="text-amber-400 font-medium"> · Password Locked</span>
+                          )}
                           {share.requireOtp && ' · OTP Required'}
                         </div>
                       </td>

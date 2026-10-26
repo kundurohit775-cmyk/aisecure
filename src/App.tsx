@@ -8,6 +8,7 @@ import { AuditTrailView } from './components/AuditTrailView';
 import { SecurityArchitectureView } from './components/SecurityArchitectureView';
 import { SecureViewerPage } from './components/SecureViewerPage';
 import { UploadDocumentModal } from './components/UploadDocumentModal';
+import { CryptoInspectorModal } from './components/CryptoInspectorModal';
 
 import {
   DocumentItem,
@@ -48,6 +49,7 @@ export default function App() {
   const [sharingDocument, setSharingDocument] = useState<DocumentItem | null>(null);
   const [managingDocShares, setManagingDocShares] = useState<DocumentItem | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [inspectingDoc, setInspectingDoc] = useState<DocumentItem | null>(null);
 
   // Audit tab filter
   const [auditDocFilter, setAuditDocFilter] = useState<string | null>(null);
@@ -187,6 +189,7 @@ export default function App() {
               }
             }}
             onViewDocumentAudit={handleViewDocumentAudit}
+            onInspectCrypto={(doc) => setInspectingDoc(doc)}
             onOpenUploadModal={() => setIsUploadModalOpen(true)}
           />
         )}
@@ -259,6 +262,14 @@ export default function App() {
           onDocumentUploaded={(newDoc) => {
             refreshAllData();
           }}
+        />
+      )}
+
+      {/* Cryptographic Proof & Cipher Inspector Modal */}
+      {inspectingDoc && (
+        <CryptoInspectorModal
+          document={inspectingDoc}
+          onClose={() => setInspectingDoc(null)}
         />
       )}
 

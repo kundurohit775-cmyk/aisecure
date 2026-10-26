@@ -9,6 +9,7 @@ import {
   Lock,
   Download,
   Eye,
+  EyeOff,
   Shield,
   Copy,
   Check,
@@ -16,6 +17,8 @@ import {
   AlertTriangle,
   UserCheck,
   Search,
+  KeyRound,
+  Sparkles,
 } from 'lucide-react';
 import { DocumentItem, User, ViewMode, AccessMode, ShareConfig } from '../types';
 import { SYSTEM_USERS, canUserShareTo, getAuthorizedRecipients } from '../lib/store';
@@ -52,6 +55,14 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   const [accessMode, setAccessMode] = useState<AccessMode>('viewer_only');
   const [requireOtp, setRequireOtp] = useState<boolean>(false);
 
+  // Password Protection states
+  const [requirePassword, setRequirePassword] = useState<boolean>(false);
+  const [password, setPassword] = useState<string>('');
+  const [passwordHint, setPasswordHint] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [isPasswordCopied, setIsPasswordCopied] = useState<boolean>(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
   // Team member selection state
   const [teamSearch, setTeamSearch] = useState('');
   const [selectedTeamMember, setSelectedTeamMember] = useState<User | null>(null);
@@ -75,12 +86,35 @@ export const ShareModal: React.FC<ShareModalProps> = ({
       ? Math.max(30, (parseInt(customTimeMinutes, 10) || 10) * 60)
       : timeLimitPreset;
 
+  const generateRandomPasskey = () => {
+    const words = ['Aegis', 'Haven', 'Cipher', 'Vanguard', 'Matrix', 'Nexus', 'Shield', 'Vault'];
+    const word = words[Math.floor(Math.random() * words.length)];
+    const num = Math.floor(1000 + Math.random() * 9000);
+    const pass = `${word}-${num}`;
+    setPassword(pass);
+    setRequirePassword(true);
+    setFormError(null);
+  };
+
+  const handleCopyPassword = () => {
+    if (!password) return;
+    navigator.clipboard.writeText(password);
+    setIsPasswordCopied(true);
+    setTimeout(() => setIsPasswordCopied(false), 2000);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
+    setFormError(null);
 
     if (tab === 'team_member' && !selectedTeamMember) {
-      alert('Please select a recipient from your authorized team member list.');
+      setFormError('Please select a recipient from your authorized team member list.');
+      return;
+    }
+
+    if (requirePassword && !password.trim()) {
+      setFormError('Please enter a document password or click Generate to create a passkey.');
       return;
     }
 
@@ -99,13 +133,16 @@ export const ShareModal: React.FC<ShareModalProps> = ({
         expiresAt: enableCalendarExpiry ? new Date(calendarExpiryDate).toISOString() : undefined,
         accessMode,
         requireOtp,
+        requirePassword,
+        password: password.trim(),
+        passwordHint: passwordHint.trim() || undefined,
       });
 
       setCreatedShare(share);
       onShareCreated(share);
     } catch (err) {
       console.error(err);
-      alert('Failed to generate secure share link.');
+      setFormError('Failed to generate secure share link.');
     } finally {
       setIsSubmitting(false);
     }
@@ -189,6 +226,50 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               </div>
             </div>
 
+            {/* If Password Protected: Display Passkey to Sender */}
+            {createdShare.requirePassword && password && (
+              <div className="p-3.5 bg-indigo-950/40 border border-indigo-700/60 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-indigo-300">
+                    <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Sender-Provided Passkey</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyPassword}
+                    className="flex items-center gap-1 text-[11px] font-medium text-indigo-400 hover:text-indigo-300"
+                  >
+                    {isPasswordCopied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-emerald-400">Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy Passkey</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between p-2 bg-slate-950 rounded border border-slate-800">
+                  <span className="font-mono text-sm font-bold text-white tracking-wider">
+                    {password}
+                  </span>
+                  {createdShare.passwordHint && (
+                    <span className="text-[11px] text-slate-400 italic">
+                      Hint: {createdShare.passwordHint}
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-[10px] text-slate-400 leading-normal">
+                  Provide this passkey out-of-band (e.g. via SMS, phone call, or secure chat) to the recipient. The document cannot be decrypted without it.
+                </p>
+              </div>
+            )}
+
             {/* Link Summary Details */}
             <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 text-xs space-y-2 text-slate-300">
               <div className="flex justify-between">
@@ -215,6 +296,12 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                   {createdShare.accessMode === 'viewer_only'
                     ? 'In-App Viewer Only (No download)'
                     : 'Allow Watermarked Download'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Password Lock:</span>
+                <span className="font-medium text-slate-200">
+                  {createdShare.requirePassword ? 'Enforced (Passkey Required)' : 'Disabled'}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -248,6 +335,13 @@ export const ShareModal: React.FC<ShareModalProps> = ({
         ) : (
           /* Form: Configuration */
           <form onSubmit={handleSubmit} className="p-6 space-y-5">
+            {formError && (
+              <div className="p-3 bg-rose-950/50 border border-rose-800/80 rounded-xl text-xs text-rose-300 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{formError}</span>
+              </div>
+            )}
+
             {/* Target Tab Navigation */}
             <div className="flex items-center p-1 bg-slate-950 border border-slate-800 rounded-lg text-xs font-medium">
               <button
@@ -514,6 +608,92 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                   </p>
                 </button>
               </div>
+            </div>
+
+            {/* Password Protection Field */}
+            <div className="p-3 bg-slate-950/50 border border-slate-800/80 rounded-xl space-y-3 text-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-6 h-6 rounded-md bg-indigo-950/80 border border-indigo-700/60 flex items-center justify-center text-indigo-400 shrink-0 mt-0.5">
+                    <KeyRound className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-200">Password Protection</span>
+                    <p className="text-[11px] text-slate-400">
+                      Requires recipient to enter a sender-provided password before viewing the document.
+                    </p>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={requirePassword}
+                  onChange={(e) => {
+                    setRequirePassword(e.target.checked);
+                    if (e.target.checked && !password) {
+                      generateRandomPasskey();
+                    }
+                  }}
+                  className="w-4 h-4 rounded text-indigo-600 bg-slate-900 border-slate-700 focus:ring-0 focus:ring-offset-0"
+                />
+              </div>
+
+              {requirePassword && (
+                <div className="pt-2 border-t border-slate-800/80 space-y-2.5">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-medium text-slate-300">
+                        Document Password / Passkey <span className="text-rose-400">*</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={generateRandomPasskey}
+                        className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 font-medium"
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        <span>Generate Passkey</span>
+                      </button>
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          setFormError(null);
+                        }}
+                        placeholder="Enter secret password (e.g. Haven-4921)"
+                        className="w-full pl-3 pr-10 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs font-mono text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                        title={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                      Password Hint <span className="text-slate-600">(Optional - visible on recipient unlock screen)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={passwordHint}
+                      onChange={(e) => setPasswordHint(e.target.value)}
+                      placeholder="e.g. Discussed in bilateral security briefing"
+                      className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <p className="text-[10px] text-slate-500">
+                    Dual Verification: Recipient must enter this secret passkey before memory decryption begins. Can be combined with Email OTP for layered authentication.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Security Toggles: OTP & Calendar Cutoff */}

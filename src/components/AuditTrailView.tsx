@@ -128,8 +128,10 @@ export const AuditTrailView: React.FC<AuditTrailViewProps> = ({
         return <span className="text-rose-400 font-mono text-[11px] font-semibold">DOC_REVOKED</span>;
       case 'DOC_EXPIRED':
         return <span className="text-amber-400 font-mono text-[11px] font-semibold">DOC_EXPIRED</span>;
-      case 'UNAUTHORIZED_ACCESS_ATTEMPT':
-        return <span className="text-rose-500 font-mono text-[11px] font-bold">UNAUTHORIZED</span>;
+      case 'PASSWORD_VERIFIED':
+        return <span className="text-emerald-300 font-mono text-[11px] font-semibold">PASS_VERIFIED</span>;
+      case 'PASSWORD_FAILED':
+        return <span className="text-rose-400 font-mono text-[11px] font-semibold">PASS_FAILED</span>;
       case 'OTP_REQUESTED':
         return <span className="text-cyan-400 font-mono text-[11px]">OTP_REQ</span>;
       case 'OTP_VERIFIED':

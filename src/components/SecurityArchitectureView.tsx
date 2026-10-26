@@ -136,21 +136,25 @@ export const SecurityArchitectureView: React.FC = () => {
         </div>
       </div>
 
-      {/* Email OTP Verification & Enumeration Resistance */}
+      {/* Multi-Layered Authentication: Password Passkey & Email OTP */}
       <div className="p-6 bg-slate-900/80 border border-slate-800 rounded-xl space-y-4">
         <div className="flex items-center gap-2">
           <KeyRound className="w-4 h-4 text-indigo-400" />
           <h2 className="text-sm font-bold text-white">
-            Email OTP Verification & User Enumeration Hardening
+            Multi-Layered Authentication: Sender Passkey & Email OTP Verification
           </h2>
         </div>
         <div className="space-y-3 text-xs text-slate-300 leading-relaxed">
           <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 space-y-1 font-mono text-[11px]">
-            <div className="text-emerald-400">✓ 6-Digit Single-Use Passcodes: Cryptographically generated via CSPRNG</div>
-            <div className="text-emerald-400">✓ Storage Security: Only SHA-256 hashes of codes are held in memory; raw codes are never logged</div>
+            <div className="text-indigo-400 font-semibold mb-1">[PASSWORD PASSKEY LAYER]</div>
+            <div className="text-emerald-400">✓ Out-of-Band Sender Passkey: Sender defines secret passkey communicated out-of-band (e.g. phone/SMS)</div>
+            <div className="text-emerald-400">✓ SHA-256 Memory Hashing: Plaintext passkey is never logged or stored; verified via cryptographic hash match</div>
+            <div className="text-emerald-400">✓ Dual Verification Support: Can run standalone or chained with Email OTP for true 2-factor authentication</div>
+            <div className="text-indigo-400 font-semibold mt-2 mb-1">[EMAIL OTP LAYER]</div>
+            <div className="text-emerald-400">✓ 6-Digit Single-Use Passcodes: Cryptographically generated via CSPRNG with 5-minute expiry</div>
             <div className="text-emerald-400">✓ Brute Force Lock: Automatically locks and burns token after 5 incorrect verification attempts</div>
-            <div className="text-emerald-400">✓ Rate Limiting & Cooldown: Enforces 60-second cooldown between resend requests and 5-minute expiry</div>
-            <div className="text-emerald-400">✓ Enumeration Resistance: Dispatches identical generic success message regardless of email validity</div>
+            <div className="text-emerald-400">✓ Rate Limiting & Cooldown: Enforces 60-second cooldown between resend requests</div>
+            <div className="text-emerald-400">✓ Enumeration Resistance: Dispatches identical generic message regardless of email validity</div>
           </div>
         </div>
       </div>
