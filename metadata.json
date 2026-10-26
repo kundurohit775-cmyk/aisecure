@@ -1,0 +1,6 @@
+{
+  "name": "HavenVault - Secure Document Sharing Platform",
+  "description": "Enterprise-grade encrypted document sharing platform with zero-disk in-memory decryption, granular share controls, dynamic tiled watermarking, audit trails, and role-based access.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

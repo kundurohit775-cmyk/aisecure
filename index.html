@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HavenVault - Secure Document Sharing Platform</title>
+    <meta name="description" content="Enterprise-grade encrypted document sharing platform with zero-disk in-memory decryption, granular share controls, dynamic tiled watermarking, audit trails, and role-based access." />
+    <meta property="og:title" content="HavenVault - Secure Document Sharing Platform" />
+    <meta property="og:description" content="Enterprise-grade encrypted document sharing platform with zero-disk in-memory decryption, granular share controls, dynamic tiled watermarking, audit trails, and role-based access." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      @media print {
+        body * {
+          visibility: hidden !important;
+        }
+        body::before {
+          content: "CONFIDENTIAL DOCUMENT - PRINTING AND REPRODUCTION FORBIDDEN BY SECURITY POLICY";
+          visibility: visible !important;
+          position: fixed;
+          top: 40%;
+          left: 10%;
+          right: 10%;
+          font-size: 24pt;
+          font-weight: bold;
+          text-align: center;
+          color: #dc2626;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-slate-950 text-slate-100 antialiased font-sans selection:bg-rose-500/30 selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
