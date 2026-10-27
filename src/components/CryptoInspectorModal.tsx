@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { DocumentItem } from '../types';
 import { decryptToBytes, sha256 } from '../lib/crypto';
+import { safeFetchJson } from '../lib/apiHelper';
 
 interface CryptoInspectorModalProps {
   document: DocumentItem;
@@ -47,20 +48,19 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
     const start = performance.now();
     try {
       // 1. Execute authenticated in-memory decryption test on server
-      const res = await fetch(`/api/documents/${document.id}/test-decrypt`, {
+      const res = await safeFetchJson<any>(`/api/documents/${document.id}/test-decrypt`, {
         method: 'POST',
         credentials: 'include',
       });
 
-      if (res.ok) {
-        const data = await res.json();
+      if (res.ok && res.data) {
         setDecryptionTestResult({
-          success: data.success,
-          durationMs: data.durationMs,
-          byteSize: data.byteSize,
-          calculatedChecksum: data.calculatedChecksum,
-          checksumMatches: data.checksumMatches,
-          previewText: data.previewText,
+          success: res.data.success,
+          durationMs: res.data.durationMs,
+          byteSize: res.data.byteSize,
+          calculatedChecksum: res.data.calculatedChecksum,
+          checksumMatches: res.data.checksumMatches,
+          previewText: res.data.previewText,
         });
         return;
       }

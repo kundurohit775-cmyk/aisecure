@@ -22,6 +22,8 @@ import {
 } from 'lucide-react';
 import { DocumentItem, User, ViewMode, AccessMode, ShareConfig } from '../types';
 import { createShareLink } from '../lib/engine';
+import { safeFetchJson } from '../lib/apiHelper';
+import { getAuthorizedRecipients } from '../lib/store';
 
 interface ShareModalProps {
   document: DocumentItem;
@@ -71,11 +73,10 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   React.useEffect(() => {
     async function loadDirectory() {
       try {
-        const res = await fetch('/api/org/directory', { credentials: 'include' });
-        if (res.ok) {
-          const data = await res.json();
+        const res = await safeFetchJson<{ recipients?: any[] }>('/api/org/directory', { credentials: 'include' });
+        if (res.ok && res.data?.recipients && res.data.recipients.length > 0) {
           setAuthorizedMembers(
-            (data.recipients || []).map((r: any) => ({
+            res.data.recipients.map((r: any) => ({
               id: r.id,
               name: r.name,
               email: r.email,
@@ -84,13 +85,16 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               managerId: r.manager_id,
             }))
           );
+          return;
         }
       } catch (err) {
-        console.error('[ShareModal] Failed to load directory:', err);
+        console.warn('[ShareModal] Remote directory fallback:', err);
       }
+      // Fallback to client-side authorized recipients
+      setAuthorizedMembers(getAuthorizedRecipients(currentUser));
     }
     loadDirectory();
-  }, []);
+  }, [currentUser]);
 
   // Completed share link state
   const [createdShare, setCreatedShare] = useState<ShareConfig | null>(null);

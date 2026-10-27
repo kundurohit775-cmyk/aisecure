@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Lock, Mail, User, Building, AlertCircle, CheckCircle2, ArrowRight, KeyRound } from 'lucide-react';
+import { Shield, Lock, Mail, User, Building, AlertCircle, CheckCircle2, ArrowRight, KeyRound, Sparkles, UserCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { safeFetchJson } from '../../lib/apiHelper';
 
 interface AuthPageProps {
   initialMode?: 'login' | 'register' | 'forgot';
 }
 
 export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => {
-  const { login, register } = useAuth();
+  const { login, register, loginAsDemoUser, isStaticMode } = useAuth();
   const [mode, setMode] = useState<'login' | 'register' | 'forgot' | 'verify' | 'reset'>(initialMode);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -17,7 +18,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [department, setDepartment] = useState('Executive Leadership');
+  const [department, setDepartment] = useState('Engineering & Information Security');
   const [inviteToken, setInviteToken] = useState('');
 
   // Reset password states
@@ -56,12 +57,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
   const handleVerifyEmailToken = async (token: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/auth/verify-email?token=${token}`);
-      const data = await res.json();
+      const res = await safeFetchJson<{ message?: string }>(`/api/auth/verify-email?token=${encodeURIComponent(token)}`);
       if (res.ok) {
-        setSuccessMessage(data.message || 'Email verified successfully! You can now log in.');
+        setSuccessMessage(res.data?.message || 'Email verified successfully! You can now log in.');
       } else {
-        setErrorMessage(data.error || 'Failed to verify email. Token may be expired.');
+        setErrorMessage(res.error || 'Failed to verify email. Token may be expired.');
       }
     } catch {
       setErrorMessage('Network error during verification');
@@ -88,6 +88,19 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
     }
   };
 
+  const handleQuickLogin = async (userId: string) => {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setLoading(true);
+
+    const res = await loginAsDemoUser(userId);
+    setLoading(false);
+
+    if (!res.success) {
+      setErrorMessage(res.error || 'Quick login failed.');
+    }
+  };
+
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -109,6 +122,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
       if (result.requiresVerification) {
         setSuccessMessage('Registration successful! Please check your email to verify your account.');
         setMode('login');
+      } else {
+        setSuccessMessage('Account registered successfully!');
       }
     }
   };
@@ -120,13 +135,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
     setLoading(true);
 
     try {
-      const res = await fetch('/api/auth/forgot-password', {
+      const res = await safeFetchJson<{ message?: string }>('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
-      const data = await res.json();
-      setSuccessMessage(data.message || 'If that email is registered, password reset instructions have been sent.');
+      if (res.ok) {
+        setSuccessMessage(res.data?.message || 'If that email is registered, password reset instructions have been sent.');
+      } else {
+        setSuccessMessage('If that email is registered, password reset instructions have been sent.');
+      }
     } catch {
       setErrorMessage('Failed to send reset link');
     } finally {
@@ -146,18 +164,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
 
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/reset-password', {
+      const res = await safeFetchJson<{ message?: string }>('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: resetToken, password: newPassword }),
       });
-      const data = await res.json();
       if (res.ok) {
         setSuccessMessage('Password reset successfully. You can now log in with your new credentials.');
         window.location.hash = '';
         setMode('login');
       } else {
-        setErrorMessage(data.error || 'Failed to reset password');
+        setErrorMessage(res.error || 'Failed to reset password');
       }
     } catch {
       setErrorMessage('Network error during password reset');
@@ -178,6 +195,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
           <p className="text-xs text-slate-400">
             Zero-Disk In-Memory Decryption & Cryptographic Document Sharing
           </p>
+          {isStaticMode && (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/50 border border-emerald-500/30 text-[11px] text-emerald-400 font-mono">
+              <Sparkles className="w-3 h-3" />
+              <span>Client Encrypted Vault Active (Zero Server Dependencies)</span>
+            </div>
+          )}
         </div>
 
         {/* Auth Card */}
@@ -233,65 +256,108 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
 
           {/* LOGIN FORM */}
           {mode === 'login' && (
-            <form onSubmit={handleLoginSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">Work Email</label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="name@company.com"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"
-                  />
+            <div className="space-y-5">
+              {/* Quick Persona Logins */}
+              <div className="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2.5">
+                  <UserCheck className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>One-Click Demo Personas</span>
                 </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-medium text-slate-300">Password</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setMode('forgot');
-                      setErrorMessage(null);
-                      setSuccessMessage(null);
-                    }}
-                    className="text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors"
+                    disabled={loading}
+                    onClick={() => handleQuickLogin('usr-admin-elena')}
+                    className="p-2 bg-slate-900 hover:bg-indigo-950/60 border border-slate-800 hover:border-indigo-500/50 rounded-lg text-left transition-all group disabled:opacity-50"
                   >
-                    Forgot password?
+                    <div className="text-xs font-bold text-white group-hover:text-indigo-300">Elena Rostova</div>
+                    <div className="text-[10px] text-emerald-400 font-medium">Administrator</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => handleQuickLogin('usr-mgr-marcus')}
+                    className="p-2 bg-slate-900 hover:bg-indigo-950/60 border border-slate-800 hover:border-indigo-500/50 rounded-lg text-left transition-all group disabled:opacity-50"
+                  >
+                    <div className="text-xs font-bold text-white group-hover:text-indigo-300">Marcus Vance</div>
+                    <div className="text-[10px] text-sky-400 font-medium">Manager</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => handleQuickLogin('usr-emp-sarah')}
+                    className="p-2 bg-slate-900 hover:bg-indigo-950/60 border border-slate-800 hover:border-indigo-500/50 rounded-lg text-left transition-all group disabled:opacity-50"
+                  >
+                    <div className="text-xs font-bold text-white group-hover:text-indigo-300">Sarah Chen</div>
+                    <div className="text-[10px] text-purple-400 font-medium">Employee</div>
                   </button>
                 </div>
-                <div className="relative">
-                  <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••••••"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"
-                  />
+              </div>
+
+              <div className="relative flex items-center justify-center">
+                <div className="border-t border-slate-800 w-full" />
+                <span className="bg-slate-900 px-2 text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                  Or enter credentials
+                </span>
+                <div className="border-t border-slate-800 w-full" />
+              </div>
+
+              <form onSubmit={handleLoginSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Work Email</label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="elena.rostova@acme-corp.internal"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-xs font-semibold text-white rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"
-              >
-                <span>{loading ? 'Authenticating...' : 'Sign In to Vault'}</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-medium text-slate-300">Password</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode('forgot');
+                        setErrorMessage(null);
+                        setSuccessMessage(null);
+                      }}
+                      className="text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                      type="password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••••••"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
 
-              <div className="pt-2 text-center">
-                <p className="text-[11px] text-slate-500">
-                  First user to register becomes Organization Administrator.
-                </p>
-              </div>
-            </form>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-xs font-semibold text-white rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"
+                >
+                  <span>{loading ? 'Authenticating...' : 'Sign In to Vault'}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </form>
+            </div>
           )}
 
           {/* REGISTER FORM */}
@@ -349,10 +415,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
                   <input
                     type="password"
                     required
-                    minLength={8}
+                    minLength={6}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="At least 8 characters"
+                    placeholder="At least 6 characters"
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
@@ -452,7 +518,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
                   minLength={8}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Repeat new password"
+                  placeholder="Re-enter new password"
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
@@ -460,37 +526,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-xs font-semibold text-white rounded-lg transition-colors"
+                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-xs font-semibold text-white rounded-lg transition-colors flex items-center justify-center gap-2"
               >
-                <span>{loading ? 'Updating Password...' : 'Save New Password'}</span>
+                <span>{loading ? 'Saving...' : 'Update Password'}</span>
               </button>
             </form>
           )}
-
-          {/* EMAIL VERIFICATION STATUS */}
-          {mode === 'verify' && (
-            <div className="space-y-4 text-center py-4">
-              <h3 className="text-sm font-semibold text-white">Email Verification</h3>
-              <p className="text-xs text-slate-400">
-                {loading ? 'Verifying your activation token with the security server...' : 'Verification complete.'}
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  window.location.hash = '';
-                  setMode('login');
-                }}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white rounded-lg transition-colors"
-              >
-                Go to Sign In
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Security Notice */}
-        <div className="text-center text-[11px] text-slate-500 font-mono">
-          <span>End-to-End Encrypted Session · HTTP-Only SameSite Cookies</span>
         </div>
       </div>
     </div>

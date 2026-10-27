@@ -10,6 +10,7 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { ShareConfig, DocumentItem, User } from '../types';
+import { safeFetchJson } from '../lib/apiHelper';
 
 interface SharedWithMeViewProps {
   currentUser: User;
@@ -30,13 +31,12 @@ export const SharedWithMeView: React.FC<SharedWithMeViewProps> = ({
   React.useEffect(() => {
     async function loadSharedWithMe() {
       try {
-        const res = await fetch('/api/shares/shared-with-me', { credentials: 'include' });
-        if (res.ok) {
-          const data = await res.json();
-          setRemoteShares(data.shares || []);
+        const res = await safeFetchJson<{ shares?: any[] }>('/api/shares/shared-with-me', { credentials: 'include' });
+        if (res.ok && res.data?.shares) {
+          setRemoteShares(res.data.shares);
         }
       } catch (err) {
-        console.error(err);
+        console.warn(err);
       } finally {
         setLoading(false);
       }

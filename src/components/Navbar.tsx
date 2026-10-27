@@ -35,7 +35,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onMarkAllNotificationsRead,
   onOpenUploadModal,
 }) => {
-  const { logout } = useAuth();
+  const { logout, loginAsDemoUser } = useAuth();
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
 
@@ -264,6 +264,45 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <Users className="w-3.5 h-3.5 text-slate-400" />
                       <span>Organization Directory</span>
                     </button>
+                  </div>
+
+                  <div className="py-1">
+                    <div className="px-4 py-1 text-[10px] font-mono text-slate-500 uppercase tracking-wider">
+                      Switch Role Persona
+                    </div>
+                    <button
+                      onClick={() => {
+                        loginAsDemoUser('usr-admin-elena');
+                        setShowUserDropdown(false);
+                      }}
+                      className="w-full text-left px-4 py-1.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 flex items-center justify-between"
+                    >
+                      <span>Elena Rostova</span>
+                      <span className="text-[10px] text-rose-400 font-mono">Admin</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        loginAsDemoUser('usr-mgr-marcus');
+                        setShowUserDropdown(false);
+                      }}
+                      className="w-full text-left px-4 py-1.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 flex items-center justify-between"
+                    >
+                      <span>Marcus Vance</span>
+                      <span className="text-[10px] text-amber-400 font-mono">Manager</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        loginAsDemoUser('usr-emp-sarah');
+                        setShowUserDropdown(false);
+                      }}
+                      className="w-full text-left px-4 py-1.5 text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 flex items-center justify-between"
+                    >
+                      <span>Sarah Chen</span>
+                      <span className="text-[10px] text-indigo-400 font-mono">Employee</span>
+                    </button>
+                  </div>
+
+                  <div className="py-1">
                     <button
                       onClick={() => {
                         logout();
