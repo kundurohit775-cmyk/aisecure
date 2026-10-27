@@ -46,29 +46,54 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
     setIsTestingDecryption(true);
     const start = performance.now();
     try {
-      const bytes = await decryptToBytes(document.encryptedPayload);
-      const durationMs = Math.round((performance.now() - start) * 100) / 100;
-      const calculatedChecksum = await sha256(bytes);
+      // 1. Execute authenticated in-memory decryption test on server
+      const res = await fetch(`/api/documents/${document.id}/test-decrypt`, {
+        method: 'POST',
+        credentials: 'include',
+      });
 
-      let previewText: string | undefined = undefined;
-      try {
-        previewText = new TextDecoder('utf-8', { fatal: false })
-          .decode(bytes.slice(0, 300))
-          .replace(/[^\x20-\x7E\n]/g, '·');
-      } catch {
-        previewText = '(Binary document payload)';
+      if (res.ok) {
+        const data = await res.json();
+        setDecryptionTestResult({
+          success: data.success,
+          durationMs: data.durationMs,
+          byteSize: data.byteSize,
+          calculatedChecksum: data.calculatedChecksum,
+          checksumMatches: data.checksumMatches,
+          previewText: data.previewText,
+        });
+        return;
       }
 
-      setDecryptionTestResult({
-        success: true,
-        durationMs,
-        byteSize: bytes.byteLength,
-        calculatedChecksum,
-        checksumMatches: calculatedChecksum === document.checksum,
-        previewText,
-      });
+      // 2. Client-side fallback if payload contains valid base64 parameters
+      if (document.encryptedPayload?.ciphertext && document.encryptedPayload.ciphertext !== 'ENCRYPTED_AT_REST') {
+        const bytes = await decryptToBytes(document.encryptedPayload);
+        const durationMs = Math.round((performance.now() - start) * 100) / 100;
+        const calculatedChecksum = await sha256(bytes);
+
+        let previewText: string | undefined = undefined;
+        try {
+          previewText = new TextDecoder('utf-8', { fatal: false })
+            .decode(bytes.slice(0, 300))
+            .replace(/[^\x20-\x7E\n]/g, '·');
+        } catch {
+          previewText = '(Binary document payload)';
+        }
+
+        setDecryptionTestResult({
+          success: true,
+          durationMs,
+          byteSize: bytes.byteLength,
+          calculatedChecksum,
+          checksumMatches: calculatedChecksum === document.checksum,
+          previewText,
+        });
+        return;
+      }
+
+      throw new Error('Encrypted payload stored in vault at rest.');
     } catch (err) {
-      console.error(err);
+      console.error('Decryption test error:', err);
       setDecryptionTestResult({
         success: false,
         durationMs: Math.round((performance.now() - start) * 100) / 100,
@@ -81,7 +106,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
     }
   };
 
-  const ciphertextPreview = document.encryptedPayload.ciphertext.substring(0, 240);
+  const ciphertextPreview = (document.encryptedPayload.ciphertext || 'ENCRYPTED_AT_REST (AES-256-GCM)').substring(0, 240);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto">

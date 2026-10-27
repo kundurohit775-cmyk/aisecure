@@ -20,14 +20,57 @@ interface SharedWithMeViewProps {
 
 export const SharedWithMeView: React.FC<SharedWithMeViewProps> = ({
   currentUser,
-  shares,
+  shares: propShares,
   documents,
   onOpenViewerWithToken,
 }) => {
-  // Find shares targeted directly to current user or where current user is the target user
-  const internalShares = shares.filter(
-    (s) => s.targetType === 'team_member' && s.targetUserId === currentUser.id
-  );
+  const [remoteShares, setRemoteShares] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    async function loadSharedWithMe() {
+      try {
+        const res = await fetch('/api/shares/shared-with-me', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          setRemoteShares(data.shares || []);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadSharedWithMe();
+  }, [currentUser.id]);
+
+  // Combine remote shares with prop shares
+  const internalShares = remoteShares.length > 0
+    ? remoteShares.map((s: any) => ({
+        id: s.id,
+        documentId: s.documentId,
+        token: s.id,
+        createdById: 'sender',
+        createdByName: s.senderName || s.senderEmail || 'Team Member',
+        createdAt: s.createdAt,
+        targetType: 'team_member' as const,
+        targetUserId: currentUser.id,
+        targetUserName: currentUser.name,
+        targetUserEmail: currentUser.email,
+        viewMode: s.accessType,
+        timeLimitSeconds: s.durationSeconds,
+        viewsCount: s.viewCount || 0,
+        maxViews: s.maxViews,
+        expiresAt: s.expiresAt,
+        firstOpenedAt: s.firstOpenedAt,
+        accessMode: s.allowDownload ? 'allow_download' as const : 'viewer_only' as const,
+        requireOtp: false,
+        requirePassword: s.hasPassword,
+        status: s.status,
+        documentTitle: s.documentTitle,
+        documentClassification: s.documentClassification,
+      }))
+    : propShares.filter((s) => s.targetType === 'team_member' && s.targetUserId === currentUser.id);
 
   return (
     <div className="space-y-6">
@@ -70,7 +113,7 @@ export const SharedWithMeView: React.FC<SharedWithMeViewProps> = ({
             No confidential documents shared with your account yet
           </h3>
           <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-            Switch persona to an Admin or Manager in the top navbar to delegate a confidential document to {currentUser.name}.
+            When an authorized administrator or manager delegates a document to your account, it will appear here with encrypted access controls.
           </p>
         </div>
       ) : (

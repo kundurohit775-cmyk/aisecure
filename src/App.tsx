@@ -9,6 +9,9 @@ import { SecurityArchitectureView } from './components/SecurityArchitectureView'
 import { SecureViewerPage } from './components/SecureViewerPage';
 import { UploadDocumentModal } from './components/UploadDocumentModal';
 import { CryptoInspectorModal } from './components/CryptoInspectorModal';
+import { AdminUsersPage } from './components/AdminUsersPage';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthPage } from './components/auth/AuthPage';
 
 import {
   DocumentItem,
@@ -17,22 +20,18 @@ import {
   NotificationItem,
   User,
 } from './types';
-import { SYSTEM_USERS, initializeSeedData } from './lib/store';
 import {
-  getStoredDocuments,
-  getStoredShares,
-  getStoredAuditLogs,
-  getStoredNotifications,
-  saveNotifications,
+  refreshVaultData,
+  markNotificationRead,
+  markAllNotificationsRead,
 } from './lib/engine';
 
-export default function App() {
-  // Current active persona (Admin by default)
-  const [currentUser, setCurrentUser] = useState<User>(SYSTEM_USERS[0]);
+function MainApp() {
+  const { user, loading: authLoading } = useAuth();
 
-  // Tab navigation
+  // Tab navigation including organization management
   const [activeTab, setActiveTab] = useState<
-    'vault' | 'shares' | 'shared-with-me' | 'audit' | 'security'
+    'vault' | 'shares' | 'shared-with-me' | 'audit' | 'security' | 'org'
   >('vault');
 
   // Vault data state
@@ -54,23 +53,26 @@ export default function App() {
   // Audit tab filter
   const [auditDocFilter, setAuditDocFilter] = useState<string | null>(null);
 
-  // Load and seed initial data
-  const refreshAllData = () => {
-    setDocuments(getStoredDocuments());
-    setShares(getStoredShares());
-    setAuditLogs(getStoredAuditLogs());
-    setNotifications(getStoredNotifications());
+  // Load initial data from real backend API
+  const refreshAllData = async () => {
+    try {
+      const data = await refreshVaultData();
+      setDocuments(data.documents);
+      setShares(data.shares);
+      setAuditLogs(data.auditLogs);
+      setNotifications(data.notifications);
+    } catch (err) {
+      console.error('[App] Failed to refresh vault data:', err);
+    }
   };
 
   useEffect(() => {
     async function init() {
       setIsInitializing(true);
       try {
-        const seed = await initializeSeedData();
-        setDocuments(seed.documents);
-        setShares(seed.shares);
-        setAuditLogs(seed.auditLogs);
-        setNotifications(seed.notifications);
+        if (user) {
+          await refreshAllData();
+        }
       } catch (err) {
         console.error('Initialization error:', err);
       } finally {
@@ -78,7 +80,7 @@ export default function App() {
       }
     }
     init();
-  }, []);
+  }, [user]);
 
   // Listen to hash changes for direct #/share/:token links
   useEffect(() => {
@@ -108,16 +110,22 @@ export default function App() {
     refreshAllData();
   };
 
-  const handleMarkNotificationRead = (id: string) => {
-    const updated = notifications.map((n) => (n.id === id ? { ...n, read: true } : n));
-    setNotifications(updated);
-    saveNotifications(updated);
+  const handleMarkNotificationRead = async (id: string) => {
+    try {
+      await markNotificationRead(id);
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleMarkAllNotificationsRead = () => {
-    const updated = notifications.map((n) => ({ ...n, read: true }));
-    setNotifications(updated);
-    saveNotifications(updated);
+  const handleMarkAllNotificationsRead = async () => {
+    try {
+      await markAllNotificationsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleViewDocumentAudit = (docId: string) => {
@@ -125,38 +133,66 @@ export default function App() {
     setActiveTab('audit');
   };
 
-  if (isInitializing) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
-        <div className="w-10 h-10 rounded-full border-2 border-indigo-500/20 border-t-indigo-500 animate-spin mb-3" />
-        <p className="text-xs font-mono text-slate-400">
-          Initializing HavenVault Encrypted Storage...
-        </p>
-      </div>
-    );
-  }
-
-  // If in Secure Viewer mode, render locked-down viewer full-screen
+  // If in Secure Viewer mode, render locked-down viewer full-screen (accessible even without account if permitted)
   if (activeViewerToken) {
+    const viewerUser: User = user
+      ? {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          department: user.department,
+          managerId: user.manager_id || undefined,
+        }
+      : {
+          id: 'external-recipient',
+          name: 'External Recipient',
+          email: 'recipient@organization.external',
+          role: 'employee',
+          department: 'External',
+        };
+
     return (
       <SecureViewerPage
         token={activeViewerToken}
-        currentUser={currentUser}
+        currentUser={viewerUser}
         onExit={handleExitViewer}
         onViewAudit={handleViewDocumentAudit}
       />
     );
   }
 
+  // Auth Loading
+  if (authLoading || isInitializing) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+        <div className="w-10 h-10 rounded-full border-2 border-indigo-500/20 border-t-indigo-500 animate-spin mb-3" />
+        <p className="text-xs font-mono text-slate-400">
+          Connecting to HavenVault Encrypted Storage...
+        </p>
+      </div>
+    );
+  }
+
+  // Not authenticated: Render production Auth view
+  if (!user) {
+    return <AuthPage />;
+  }
+
+  const currentUser: User = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    department: user.department,
+    managerId: user.manager_id || undefined,
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col text-slate-100">
       {/* Top Navigation Bar */}
       <Navbar
-        currentUser={currentUser}
-        onSelectUser={(u) => {
-          setCurrentUser(u);
-          refreshAllData();
-        }}
+        currentUser={user}
         activeTab={activeTab}
         onSelectTab={(tab) => {
           setActiveTab(tab);
@@ -178,7 +214,6 @@ export default function App() {
             onOpenShareModal={(doc) => setSharingDocument(doc)}
             onOpenManageShares={(doc) => setManagingDocShares(doc)}
             onOpenDirectViewer={(doc) => {
-              // Create or find an active share token to test direct preview
               const existingShare = shares.find(
                 (s) => s.documentId === doc.id && s.status === 'active'
               );
@@ -224,6 +259,8 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'org' && <AdminUsersPage />}
+
         {activeTab === 'security' && <SecurityArchitectureView />}
       </main>
 
@@ -259,7 +296,7 @@ export default function App() {
         <UploadDocumentModal
           currentUser={currentUser}
           onClose={() => setIsUploadModalOpen(false)}
-          onDocumentUploaded={(newDoc) => {
+          onDocumentUploaded={() => {
             refreshAllData();
           }}
         />
@@ -281,5 +318,13 @@ export default function App() {
         </div>
       </footer>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainApp />
+    </AuthProvider>
   );
 }

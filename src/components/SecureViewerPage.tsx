@@ -194,14 +194,13 @@ export const SecureViewerPage: React.FC<SecureViewerPageProps> = ({
 
   const handleDownloadCopy = async () => {
     if (!accessResult || !accessResult.success) return;
-    setIsDownloading(true);
     try {
-      const { pdfBytes, filename } = await downloadWatermarkedCopy({
+      const pdfBytes = await downloadWatermarkedCopy({
         share: accessResult.share,
         document: accessResult.document,
         currentUser,
-        watermarkConfig: accessResult.watermarkConfig,
       });
+      const filename = `CONFIDENTIAL_${accessResult.document.filename || 'Document.pdf'}`;
 
       // Stream to client as download
       const blob = new Blob([pdfBytes as unknown as BlobPart], { type: 'application/pdf' });
@@ -339,11 +338,25 @@ export const SecureViewerPage: React.FC<SecureViewerPageProps> = ({
   }
 
   // Handle OTP Verification State
-  if (isOtpActive && accessResult && !accessResult.success && accessResult.share) {
+  if (isOtpActive && accessResult && !accessResult.success) {
+    const activeShare: ShareConfig = accessResult.share || {
+      id: token,
+      documentId: 'doc',
+      token,
+      createdById: 'owner',
+      createdByName: 'Sender',
+      createdAt: new Date().toISOString(),
+      targetType: 'link',
+      viewMode: 'unlimited',
+      viewsCount: 0,
+      accessMode: 'viewer_only',
+      requireOtp: true,
+      status: 'active',
+    };
     return (
       <OtpVerification
-        share={accessResult.share}
-        recipientEmail={currentUser.email}
+        share={activeShare}
+        recipientEmail={(accessResult.details?.maskedEmail as string) || currentUser.email}
         onVerified={(code) => {
           setIsOtpActive(false);
           fetchAccess(code);

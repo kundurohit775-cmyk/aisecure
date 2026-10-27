@@ -21,7 +21,6 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { DocumentItem, User, ViewMode, AccessMode, ShareConfig } from '../types';
-import { SYSTEM_USERS, canUserShareTo, getAuthorizedRecipients } from '../lib/store';
 import { createShareLink } from '../lib/engine';
 
 interface ShareModalProps {
@@ -66,14 +65,38 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   // Team member selection state
   const [teamSearch, setTeamSearch] = useState('');
   const [selectedTeamMember, setSelectedTeamMember] = useState<User | null>(null);
+  const [authorizedMembers, setAuthorizedMembers] = useState<User[]>([]);
+
+  // Load real team members from organization directory
+  React.useEffect(() => {
+    async function loadDirectory() {
+      try {
+        const res = await fetch('/api/org/directory', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          setAuthorizedMembers(
+            (data.recipients || []).map((r: any) => ({
+              id: r.id,
+              name: r.name,
+              email: r.email,
+              role: r.role,
+              department: r.department,
+              managerId: r.manager_id,
+            }))
+          );
+        }
+      } catch (err) {
+        console.error('[ShareModal] Failed to load directory:', err);
+      }
+    }
+    loadDirectory();
+  }, []);
 
   // Completed share link state
   const [createdShare, setCreatedShare] = useState<ShareConfig | null>(null);
   const [isCopied, setIsCopied] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Authorized recipients under reporting structure
-  const authorizedMembers = getAuthorizedRecipients(currentUser);
   const filteredTeamMembers = authorizedMembers.filter(
     (u) =>
       u.name.toLowerCase().includes(teamSearch.toLowerCase()) ||
@@ -124,13 +147,11 @@ export const ShareModal: React.FC<ShareModalProps> = ({
         documentId: document.id,
         currentUser,
         targetType: tab,
-        targetUserId: tab === 'team_member' ? selectedTeamMember?.id : undefined,
-        targetUserName: tab === 'team_member' ? selectedTeamMember?.name : undefined,
-        targetUserEmail: tab === 'team_member' ? selectedTeamMember?.email : undefined,
+        targetUser: tab === 'team_member' ? selectedTeamMember || undefined : undefined,
         viewMode,
         timeLimitSeconds: viewMode === 'time_limited' ? effectiveTimeSeconds : undefined,
         maxViews: viewMode === 'max_views' ? maxViews : viewMode === 'view_once' ? 1 : undefined,
-        expiresAt: enableCalendarExpiry ? new Date(calendarExpiryDate).toISOString() : undefined,
+        calendarExpiryIso: enableCalendarExpiry ? new Date(calendarExpiryDate).toISOString() : undefined,
         accessMode,
         requireOtp,
         requirePassword,

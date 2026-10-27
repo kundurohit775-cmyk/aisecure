@@ -83,6 +83,10 @@ export async function decryptToBytes(payload: EncryptedPayload): Promise<Uint8Ar
   const iv = base64ToBuffer(payload.iv);
   const ciphertext = base64ToBuffer(payload.ciphertext);
 
+  if (salt.length === 0 || iv.length === 0 || ciphertext.length === 0) {
+    throw new Error('Encrypted payload missing valid cryptographic parameters');
+  }
+
   const key = await deriveKey(salt);
 
   const decryptedBuffer = await window.crypto.subtle.decrypt(
@@ -155,20 +159,66 @@ export function generateTrackingId(): string {
 }
 
 // Helper conversions
+/**
+ * Safely decodes base64 / base64url / data-URI strings without throwing
+ * DOMException: Failed to execute 'atob' on 'Window': The string did not match the expected pattern.
+ */
+export function safeAtob(input: string): string {
+  if (!input || typeof input !== 'string') return '';
+  // Strip any data URI prefix: data:...;base64,
+  let cleaned = input.includes(',') ? input.split(',')[1] : input;
+  // Remove all whitespace, line breaks, and carriage returns
+  cleaned = cleaned.replace(/\s+/g, '');
+  // Convert URL-safe base64 (- and _) to standard (+ and /)
+  cleaned = cleaned.replace(/-/g, '+').replace(/_/g, '/');
+  // Pad with '=' if length is not a multiple of 4
+  const mod = cleaned.length % 4;
+  if (mod === 2) cleaned += '==';
+  else if (mod === 3) cleaned += '=';
+  else if (mod === 1) {
+    return '';
+  }
+
+  // Ensure only valid base64 alphabet characters exist before invoking window.atob
+  if (!/^[A-Za-z0-9+/=]*$/.test(cleaned)) {
+    return '';
+  }
+
+  try {
+    return window.atob(cleaned);
+  } catch (err) {
+    console.warn('[Crypto] safeAtob decoding error:', err);
+    return '';
+  }
+}
+
 export function bufferToBase64(buffer: ArrayBuffer | Uint8Array): string {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  const len = bytes.byteLength;
+  const chunkSize = 8192;
+  for (let i = 0; i < len; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, len));
+    for (let j = 0; j < chunk.length; j++) {
+      binary += String.fromCharCode(chunk[j]);
+    }
   }
   return window.btoa(binary);
 }
 
 export function base64ToBuffer(base64: string): Uint8Array {
-  const binary = window.atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
+  if (!base64 || typeof base64 !== 'string') return new Uint8Array(0);
+  try {
+    const binary = safeAtob(base64);
+    if (!binary) return new Uint8Array(0);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  } catch (e) {
+    console.error('[Crypto] base64ToBuffer failed:', e);
+    return new Uint8Array(0);
   }
-  return bytes;
 }
+

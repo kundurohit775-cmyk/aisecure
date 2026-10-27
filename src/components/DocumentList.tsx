@@ -63,9 +63,7 @@ export const DocumentList: React.FC<DocumentListProps> = ({
   const handleShareClick = (doc: DocumentItem) => {
     if (currentUser.role === 'employee') {
       setRoleRestrictionMessage(
-        `Role Restriction: As an Employee (${currentUser.name}), your account is restricted from initiating document shares. Share delegation must be initiated by your department manager (${
-          currentUser.managerId ? 'Marcus Vance' : 'Department Lead'
-        }) or department head.`
+        `Role Restriction: As an Employee (${currentUser.name}), your account is restricted from initiating document shares. Share delegation must be initiated by your department manager or department head.`
       );
       return;
     }

@@ -139,9 +139,9 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({
       // Step 5: Verification & Checksum
       setCryptoStep(5);
       setEncryptionProof({
-        ivPreview: doc.encryptedPayload.iv,
-        saltPreview: doc.encryptedPayload.salt,
-        ciphertextSnippet: doc.encryptedPayload.ciphertext.substring(0, 80) + '...',
+        ivPreview: doc.encryptedPayload?.iv || '',
+        saltPreview: doc.encryptedPayload?.salt || '',
+        ciphertextSnippet: (doc.encryptedPayload?.ciphertext || 'CIPHERTEXT_REST').substring(0, 80) + '...',
         checksum: doc.checksum,
       });
 

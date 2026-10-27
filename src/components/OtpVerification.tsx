@@ -32,8 +32,6 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [simulatedInboxCode, setSimulatedInboxCode] = useState<string | null>(null);
-  const [showSimulatedEmailDrawer, setShowSimulatedEmailDrawer] = useState(true);
   const [isRequesting, setIsRequesting] = useState(false);
   const [isCodeRequested, setIsCodeRequested] = useState(false);
 
@@ -61,9 +59,6 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
       setInfoMessage(res.message);
       if (res.cooldownSeconds) {
         setCooldownSeconds(res.cooldownSeconds);
-      }
-      if (res.demoSimulatedCode) {
-        setSimulatedInboxCode(res.demoSimulatedCode);
       }
       setIsCodeRequested(true);
     } catch (err) {
@@ -98,13 +93,6 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
       const prevInput = document.getElementById(`otp-input-${index - 1}`);
       prevInput?.focus();
     }
-  };
-
-  const handleAutofillDemoCode = () => {
-    if (!simulatedInboxCode) return;
-    const digits = simulatedInboxCode.split('');
-    setCodeDigits(digits);
-    onVerified(simulatedInboxCode);
   };
 
   return (
@@ -175,34 +163,19 @@ export const OtpVerification: React.FC<OtpVerificationProps> = ({
           </div>
         </div>
 
-        {/* Simulated Email Inbox Preview (For Demo & Testing) */}
-        {simulatedInboxCode && (
-          <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
-                <Inbox className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Simulated Email Delivery Inbox</span>
-              </span>
-              <button
-                type="button"
-                onClick={handleAutofillDemoCode}
-                className="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium underline"
-              >
-                Autofill ({simulatedInboxCode})
-              </button>
-            </div>
-            <div className="text-[11px] font-mono text-slate-400 bg-slate-900 p-2.5 rounded border border-slate-800/80 space-y-1">
-              <div>From: HavenVault Security &lt;auth@havenvault.internal&gt;</div>
-              <div>To: {emailInput}</div>
-              <div className="text-white pt-1">
-                Security Passcode: <span className="text-indigo-400 font-bold text-sm tracking-widest">{simulatedInboxCode}</span>
-              </div>
-              <div className="text-slate-500 text-[10px]">
-                Single-use • 5 wrong attempts lock this token • Rate-limited
-              </div>
-            </div>
+        {/* Production Real-Time Email Delivery Status */}
+        <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1.5 text-xs text-slate-400">
+          <div className="flex items-center gap-2 text-indigo-300 font-semibold text-[11px]">
+            <Mail className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Secure Email Passcode Dispatched</span>
           </div>
-        )}
+          <p className="text-[11px] leading-relaxed text-slate-400">
+            A single-use 6-digit verification code was sent to <span className="text-slate-200 font-medium">{emailInput}</span>. Check your inbox and spam folder.
+          </p>
+          <div className="text-[10px] text-slate-500 font-mono pt-1">
+            Protected by rate-limiting · 5 incorrect attempts permanently lock this access link
+          </div>
+        </div>
 
         {/* Cancel / Return */}
         <div className="pt-2 border-t border-slate-800">

@@ -33,6 +33,17 @@
     </style>
   </head>
   <body class="bg-slate-950 text-slate-100 antialiased font-sans selection:bg-rose-500/30 selection:text-white">
+    <script>
+      // Suppress benign Vite HMR websocket disconnection error in iframe preview where HMR is disabled
+      window.addEventListener('unhandledrejection', function(event) {
+        if (event.reason && (
+          (typeof event.reason.message === 'string' && event.reason.message.includes('WebSocket')) ||
+          (typeof event.reason === 'string' && event.reason.includes('WebSocket'))
+        )) {
+          event.preventDefault();
+        }
+      });
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
